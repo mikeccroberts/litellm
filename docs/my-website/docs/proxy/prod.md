@@ -22,7 +22,6 @@ general_settings:
   database_connection_pool_limit: 10 # limit the number of database connections to = MAX Number of DB Connections/Number of instances of litellm proxy (Around 10-20 is good number)
 
   # OPTIONAL Best Practices
-  disable_spend_logs: True # turn off writing each transaction to the db. We recommend doing this is you don't need to see Usage on the LiteLLM UI and are tracking metrics via Prometheus
   disable_error_logs: True # turn off writing LLM Exceptions to DB
   allow_requests_on_db_unavailable: True # Only USE when running LiteLLM on your VPC. Allow requests to still be processed even if the DB is unavailable. We recommend doing this if you're running LiteLLM on VPC that cannot be accessed from the public internet.
 
@@ -139,23 +138,9 @@ When `allow_requests_on_db_unavailable` is set to `true`, LiteLLM will handle er
 | LiteLLM Budget Errors or Model Errors | ❌ Request will be blocked | Triggered when the DB is reachable but the authentication token is invalid, lacks access, or exceeds budget limits. |
 
 
-## 7. Disable spend_logs & error_logs if not using the LiteLLM UI
-
-By default, LiteLLM writes several types of logs to the database:
-- Every LLM API request to the `LiteLLM_SpendLogs` table
-- LLM Exceptions to the `LiteLLM_SpendLogs` table
-
-If you're not viewing these logs on the LiteLLM UI, you can disable them by setting the following flags to `True`:
-
-```yaml
-general_settings:
-  disable_spend_logs: True    # Disable writing spend logs to DB
-  disable_error_logs: True    # Disable writing error logs to DB
-```
-
 [More information about what the Database is used for here](db_info)
 
-## 8. Use Helm PreSync Hook for Database Migrations [BETA]
+## 7. Use Helm PreSync Hook for Database Migrations [BETA]
 
 To ensure only one service manages database migrations, use our [Helm PreSync hook for Database Migrations](https://github.com/BerriAI/litellm/blob/main/deploy/charts/litellm-helm/templates/migrations-job.yaml). This ensures migrations are handled during `helm upgrade` or `helm install`, while LiteLLM pods explicitly disable migrations.
 
@@ -183,7 +168,7 @@ To ensure only one service manages database migrations, use our [Helm PreSync ho
    ```
 
 
-## 9. Set LiteLLM Salt Key 
+## 8. Set LiteLLM Salt Key 
 
 If you plan on using the DB, set a salt key for encrypting/decrypting variables in the DB. 
 
@@ -198,7 +183,7 @@ export LITELLM_SALT_KEY="sk-1234"
 [**See Code**](https://github.com/BerriAI/litellm/blob/036a6821d588bd36d170713dcf5a72791a694178/litellm/proxy/common_utils/encrypt_decrypt_utils.py#L15)
 
 
-## 10. Use `prisma migrate deploy`
+## 9. Use `prisma migrate deploy`
 
 Use this to handle db migrations across LiteLLM versions in production
 
@@ -246,6 +231,24 @@ If you see a `Permission denied` error, it means the LiteLLM pod is running with
 To fix this, just set `LITELLM_MIGRATION_DIR="/path/to/writeable/directory"` in your environment.
 
 LiteLLM will use this directory to write migration files.
+
+## 10. Use a Separate Health Check App
+Using a separate health check app ensures that your liveness and readiness probes remain responsive even when the main application is under heavy load. 
+
+**Why is this important?**
+
+- If your health endpoints share the same process as your main app, high traffic or resource exhaustion can cause health checks to hang or fail.
+- When Kubernetes liveness probes hang or time out, it may incorrectly assume your pod is unhealthy and restart it—even if the main app is just busy, not dead.
+- By running health endpoints on a separate lightweight FastAPI app (with its own port), you guarantee that health checks remain fast and reliable, preventing unnecessary pod restarts during traffic spikes or heavy workloads.
+- Since the proxy and health app are running in the same pod, if health check app fails, it signifies that the pod is unhealthy and needs to restart/have action taken upon.
+
+**How to enable:**
+
+Set the following environment variable(s):
+```bash
+SEPARATE_HEALTH_APP="1" # Default "0" 
+SEPARATE_HEALTH_PORT="8001" # Default "4001", Works only if `SEPARATE_HEALTH_APP` is "1"
+```
 
 ## Extras
 ### Expected Performance in Production

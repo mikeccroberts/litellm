@@ -94,3 +94,5 @@ test.py
 litellm_config.yaml
 .cursor
 config/*
+config/*
+.vscode/launch.json
